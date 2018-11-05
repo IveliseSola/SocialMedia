@@ -4,6 +4,7 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
+import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.stereotype.Service;
 import org.springframework.util.FileCopyUtils;
 import org.springframework.util.FileSystemUtils;
@@ -23,13 +24,13 @@ public class ImageService {
     private static String UPLOAD_ROOT = "upload_dir";
     private final ResourceLoader resourceLoader;
 
-    public ImageService(ResourceLoader resourceLoader){
+    public ImageService(ResourceLoader resourceLoader) {
         this.resourceLoader = resourceLoader;
     }
 
     @Bean
     CommandLineRunner setUp() throws IOException {
-        return (args) ->  {
+        return (args) -> {
             FileSystemUtils.deleteRecursively(new File(UPLOAD_ROOT));
             Files.createDirectories(Paths.get(UPLOAD_ROOT));
             FileCopyUtils.copy("test file", new FileWriter(UPLOAD_ROOT + "/photo.jpg"));
@@ -39,19 +40,35 @@ public class ImageService {
     }
 
     public Flux<Image> findAllImages() {
-        try{
-           return  Flux.fromIterable( Files.newDirectoryStream(Paths.get(UPLOAD_ROOT)
-           )).map(path ->
-                   new Image(path.toString(),
-                             path.getFileName().toString()));
-        } catch (IOException e){
+        try {
+            return Flux.fromIterable(Files.newDirectoryStream(Paths.get(UPLOAD_ROOT)
+            )).map(path ->
+                    new Image(path.toString(),
+                            path.getFileName().toString()));
+        } catch (IOException e) {
             return Flux.empty();
         }
     }
 
-    public Mono<Resource> findOneImage(String fileName){
+    public Mono<Resource> findOneImage(String fileName) {
         return Mono.fromSupplier(() ->
-        resourceLoader.getResource("file:" + UPLOAD_ROOT + "/" + fileName));
+                resourceLoader.getResource("file:" + UPLOAD_ROOT + "/" + fileName));
 
+    }
+
+    public Mono<Void> creteImage(Flux<FilePart> files) {
+        return files.flatMap(file ->
+                file.transferTo(Paths.get(UPLOAD_ROOT, file.filename()).toFile())).then();
+    }
+
+
+    public Mono<Void> dleteImage(String fileName) {
+        return Mono.fromRunnable(() -> {
+            try {
+                Files.deleteIfExists(Paths.get(UPLOAD_ROOT, fileName));
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
     }
 }
